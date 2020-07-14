@@ -140,6 +140,9 @@ class ArgumentParser(cfargparse.ArgumentParser):
         assert len(opt.train_src) == len(opt.train_ids), \
             "Please provide proper -train_ids for your data!"
 
+        assert len(opt.train_src_nfr_tag) == len(opt.train_src), \
+            "Please provide same number of nfr tag and source train files!"
+
         for file in opt.train_src + opt.train_tgt:
             assert os.path.isfile(file), "Please check path of %s" % file
 

@@ -191,7 +191,7 @@ class TransformerFlatEncoder(EncoderBase):
             out = layer(out, mask)
         out = self.layer_norm(out)
 
-        return emb, out.transpose(0, 1).contiguous(), lengths
+        return emb, out.transpose(0, 1).contiguous(), real_source_lengths
 
     def update_dropout(self, dropout, attention_dropout):
         self.embeddings.update_dropout(dropout)

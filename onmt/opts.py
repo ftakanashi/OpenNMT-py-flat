@@ -248,6 +248,8 @@ def preprocess_opts(parser):
               help="Path(s) to the training src-tgt alignment")
     group.add('--train_ids', '-train_ids', nargs='+', default=[None],
               help="ids to name training shards, used for corpus weighting")
+    group.add('--train_src_nfr_tag', '-train_src_nfr_tag', nargs='+', default=[None],
+              help="NFR tags (S, T, R, etc.) specifying type of token in source sequence.")
 
     group.add('--valid_src', '-valid_src',
               help="Path to the validation source data")
