@@ -43,6 +43,9 @@ def model_opts(parser):
     group.add('--position_encoding', '-position_encoding', action='store_true',
               help="Use a sin to mark relative words positions. "
                    "Necessary for non-RNN style models.")
+    group.add('--segment_embedding', '-segment_embedding', action='store_true',
+              help="Add a segment embedding to the input representations of diverse sentences."
+                   "NOTE. delimeter between sentences are set to be '@@@' currently.")
 
     group = parser.add_argument_group('Model-Embedding Features')
     group.add('--feat_merge', '-feat_merge', type=str, default='concat',
@@ -71,15 +74,19 @@ def model_opts(parser):
               help='Data type of the model.')
 
     group.add('--encoder_type', '-encoder_type', type=str, default='rnn',
-              choices=['rnn', 'brnn', 'ggnn', 'mean', 'transformer', 'cnn'],
+              choices=['rnn', 'brnn', 'ggnn', 'mean', 'transformer', 'cnn', 'transformer_flat'],
               help="Type of encoder layer to use. Non-RNN layers "
                    "are experimental. Options are "
-                   "[rnn|brnn|ggnn|mean|transformer|cnn].")
+                   "[rnn|brnn|ggnn|mean|transformer|cnn|transformer_flat].")
     group.add('--decoder_type', '-decoder_type', type=str, default='rnn',
               choices=['rnn', 'transformer', 'cnn'],
               help="Type of decoder layer to use. Non-RNN layers "
                    "are experimental. Options are "
                    "[rnn|transformer|cnn].")
+
+    group.add('--flat_layers', '-flat_layers', type=int, default=-1,
+              help='Specify the number of top encoder layers in a flat encoder.'
+                   'Default value is -1 which means non-flat encoder.')
 
     group.add('--layers', '-layers', type=int, default=-1,
               help='Number of layers in enc/dec.')

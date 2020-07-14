@@ -47,9 +47,15 @@ def build_embeddings(opt, text_field, for_encoder=True):
     fix_word_vecs = opt.fix_word_vecs_enc if for_encoder \
         else opt.fix_word_vecs_dec
 
+    if opt.segment_embedding:
+        seg_token_id = opt.seg_token_id
+    else:
+        seg_token_id = None
+
     emb = Embeddings(
         word_vec_size=emb_dim,
         position_encoding=opt.position_encoding,
+        seg_token_id=seg_token_id,
         feat_merge=opt.feat_merge,
         feat_vec_exponent=opt.feat_vec_exponent,
         feat_vec_size=opt.feat_vec_size,
@@ -141,6 +147,9 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
     # Build embeddings.
     if model_opt.model_type == "text" or model_opt.model_type == "vec":
         src_field = fields["src"]
+        if model_opt.segment_embedding:
+            src_vocab = src_field.fields[0][1].vocab.stoi
+            model_opt.seg_token_id = src_vocab['@@@']
         src_emb = build_embeddings(model_opt, src_field)
     else:
         src_emb = None

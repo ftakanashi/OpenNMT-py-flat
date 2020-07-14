@@ -130,6 +130,7 @@ class Embeddings(nn.Module):
                  word_vocab_size,
                  word_padding_idx,
                  position_encoding=False,
+                 seg_token_id=None,
                  feat_merge="concat",
                  feat_vec_exponent=0.7,
                  feat_vec_size=-1,
@@ -199,6 +200,10 @@ class Embeddings(nn.Module):
             pe = PositionalEncoding(dropout, self.embedding_size)
             self.make_embedding.add_module('pe', pe)
 
+        self.seg_token_id = seg_token_id
+        if self.seg_token_id is not None:
+            self.segment_embedding = nn.Embedding(2, self.embedding_size)
+
         if fix_word_vecs:
             self.word_lut.weight.requires_grad = False
 
@@ -257,7 +262,7 @@ class Embeddings(nn.Module):
             else:
                 self.word_lut.weight.data.copy_(pretrained)
 
-    def forward(self, source, step=None):
+    def forward(self, source, step=None, output_real_source_lengths=False):
         """Computes the embeddings for words and features.
 
         Args:
@@ -266,6 +271,13 @@ class Embeddings(nn.Module):
         Returns:
             FloatTensor: Word embeddings ``(len, batch, embedding_size)``
         """
+
+        if self.seg_token_id is not None:
+            seg_tokens, real_source_lengths = self.convert_seg_token(source, self.seg_token_id)
+            seg_emb = self.segment_embedding(seg_tokens)
+        else:
+            seg_emb = torch.zeros_like(source)
+            real_source_lengths = None
 
         if self.position_encoding:
             for i, module in enumerate(self.make_embedding._modules.values()):
@@ -276,8 +288,33 @@ class Embeddings(nn.Module):
         else:
             source = self.make_embedding(source)
 
+        if self.seg_token_id is not None:
+            source += seg_emb
+
+        if output_real_source_lengths:
+            return source, real_source_lengths
         return source
 
     def update_dropout(self, dropout):
         if self.position_encoding:
             self._modules['make_embedding'][1].dropout.p = dropout
+
+
+    def convert_seg_token(self, source, seg_token_id):
+        norm_shape = source.squeeze(-1).t()
+        seg_tokens = torch.zeros_like(norm_shape)
+        rows, cols = seg_tokens.shape
+        real_source_lengths = []
+        for i in range(rows):
+            flag = 0
+            row_len_count = 0
+            for j in range(cols):
+                if flag == 0:
+                    row_len_count += 1
+                if norm_shape[i][j] == seg_token_id:
+                    flag = 1
+                seg_tokens[i][j] = flag
+            real_source_lengths.append(row_len_count)
+        seg_tokens = seg_tokens.t()
+        real_source_lengths = torch.Tensor(real_source_lengths).type(torch.int64).to(seg_tokens.device)
+        return seg_tokens, real_source_lengths
