@@ -131,6 +131,9 @@ class Embeddings(nn.Module):
                  word_padding_idx,
                  position_encoding=False,
                  seg_token_id=None,
+                 # wei 20200723
+                 flat_layer_flag=-1,
+                 # end wei
                  feat_merge="concat",
                  feat_vec_exponent=0.7,
                  feat_vec_size=-1,
@@ -204,6 +207,8 @@ class Embeddings(nn.Module):
         if self.seg_token_id is not None:
             self.segment_embedding = nn.Embedding(2, self.embedding_size)
 
+        self.flat_layer_flag = flat_layer_flag    # wei 20200723
+
         if fix_word_vecs:
             self.word_lut.weight.requires_grad = False
 
@@ -262,7 +267,7 @@ class Embeddings(nn.Module):
             else:
                 self.word_lut.weight.data.copy_(pretrained)
 
-    def forward(self, source, step=None, output_real_source_lengths=False):
+    def forward(self, source, step=None):
         """Computes the embeddings for words and features.
 
         Args:
@@ -276,8 +281,8 @@ class Embeddings(nn.Module):
             seg_tokens, real_source_lengths = self.convert_seg_token(source, self.seg_token_id)
             seg_emb = self.segment_embedding(seg_tokens)
         else:
-            seg_emb = torch.zeros_like(source)
-            real_source_lengths = None
+            seg_emb = torch.zeros_like(source)    # dummy
+            real_source_lengths = None    # dummy
 
         if self.position_encoding:
             for i, module in enumerate(self.make_embedding._modules.values()):
@@ -291,7 +296,7 @@ class Embeddings(nn.Module):
         if self.seg_token_id is not None:
             source += seg_emb
 
-        if output_real_source_lengths:
+        if self.flat_layer_flag > 0:    # when at least one layer is flat, output the real source lengths
             return source, real_source_lengths
         return source
 

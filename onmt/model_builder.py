@@ -47,15 +47,26 @@ def build_embeddings(opt, text_field, for_encoder=True):
     fix_word_vecs = opt.fix_word_vecs_enc if for_encoder \
         else opt.fix_word_vecs_dec
 
-    if opt.segment_embedding:
+    # if seg_token_id is None, it indicates that segment_embedding is False.
+    if opt.segment_embedding and for_encoder:
         seg_token_id = opt.seg_token_id
     else:
         seg_token_id = None
+
+    # wei 20200723
+    if opt.flat_layers > 0 and for_encoder:
+        flat_layer_flag = opt.flat_layers
+    else:
+        flat_layer_flag = -1
+    # end wei
 
     emb = Embeddings(
         word_vec_size=emb_dim,
         position_encoding=opt.position_encoding,
         seg_token_id=seg_token_id,
+        # wei 20200723
+        flat_layer_flag=flat_layer_flag,
+        # end wei
         feat_merge=opt.feat_merge,
         feat_vec_exponent=opt.feat_vec_exponent,
         feat_vec_size=opt.feat_vec_size,

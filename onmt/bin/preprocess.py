@@ -46,9 +46,11 @@ def check_existing_pt_files(opt, corpus_type, ids, existing_fields):
 
 
 def process_one_shard(corpus_params, params):
-    corpus_type, fields, src_reader, tgt_reader, align_reader, opt,\
-         existing_fields, src_vocab, tgt_vocab = corpus_params
-    i, (src_shard, tgt_shard, align_shard, maybe_id, filter_pred) = params
+    # corpus_type, fields, src_reader, tgt_reader, align_reader, opt, \    # wei 20200721
+    corpus_type, fields, src_reader, tgt_reader, tag_reader, align_reader, opt, \
+        existing_fields, src_vocab, tgt_vocab = corpus_params
+    # i, (src_shard, tgt_shard, align_shard, maybe_id, filter_pred) = params    # wei 20200721
+    i, (src_shard, tgt_shard, align_shard, tag_shard, maybe_id, filter_pred) = params
     # create one counter per shard
     sub_sub_counter = defaultdict(Counter)
     assert len(src_shard) == len(tgt_shard)
@@ -57,8 +59,12 @@ def process_one_shard(corpus_params, params):
     src_data = {"reader": src_reader, "data": src_shard, "dir": opt.src_dir}
     tgt_data = {"reader": tgt_reader, "data": tgt_shard, "dir": None}
     align_data = {"reader": align_reader, "data": align_shard, "dir": None}
+    # wei 20200721
+    tag_data = {'reader': tag_reader, 'data': tag_shard, 'dir': None}
+    # end wei
     _readers, _data, _dir = inputters.Dataset.config(
-        [('src', src_data), ('tgt', tgt_data), ('align', align_data)])
+        # [('src', src_data), ('tgt', tgt_data), ('align', align_data)])
+        [('src', src_data), ('tgt', tgt_data), ('align', align_data), ('tag', tag_data)])
 
     dataset = inputters.Dataset(
         fields, readers=_readers, data=_data, dirs=_dir,
@@ -131,7 +137,8 @@ def maybe_load_vocab(corpus_type, counters, opt):
     return src_vocab, tgt_vocab, existing_fields
 
 
-def build_save_dataset(corpus_type, fields, src_reader, tgt_reader,
+# def build_save_dataset(corpus_type, fields, src_reader, tgt_reader,    # wei 20200721
+def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, tag_reader,
                        align_reader, opt):
     assert corpus_type in ['train', 'valid']
 
@@ -141,6 +148,10 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader,
         tgts = opt.train_tgt
         ids = opt.train_ids
         aligns = opt.train_align
+        # wei 20200721
+        tags = opt.train_nfr_tag
+        # end wei
+
     elif corpus_type == 'valid':
         counters = None
         srcs = [opt.valid_src]
@@ -158,12 +169,13 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader,
     if existing_shards == ids and not opt.overwrite:
         return
 
-    def shard_iterator(srcs, tgts, ids, aligns, existing_shards,
+    # def shard_iterator(srcs, tgts, ids, aligns, existing_shards,    # wei 20200721
+    def shard_iterator(srcs, tgts, ids, aligns, tags, existing_shards,
                        existing_fields, corpus_type, opt):
         """
         Builds a single iterator yielding every shard of every corpus.
         """
-        for src, tgt, maybe_id, maybe_align in zip(srcs, tgts, ids, aligns):
+        for src, tgt, maybe_id, maybe_align, tag in zip(srcs, tgts, ids, aligns, tags):
             if maybe_id in existing_shards:
                 if opt.overwrite:
                     logger.warning("Overwrite shards for corpus {}"
@@ -190,15 +202,24 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader,
             src_shards = split_corpus(src, opt.shard_size)
             tgt_shards = split_corpus(tgt, opt.shard_size)
             align_shards = split_corpus(maybe_align, opt.shard_size)
-            for i, (ss, ts, a_s) in enumerate(
-                    zip(src_shards, tgt_shards, align_shards)):
-                yield (i, (ss, ts, a_s, maybe_id, filter_pred))
+            # wei 20200721
+            tag_shards = split_corpus(tag, opt.shard_size)
+            # end wei
 
-    shard_iter = shard_iterator(srcs, tgts, ids, aligns, existing_shards,
+            # for i, (ss, ts, a_s) in enumerate(    # wei 20200721
+            for i, (ss, ts, a_s, t_s) in enumerate(
+                    # zip(src_shards, tgt_shards, align_shards)):    # wei 20200721
+                    zip(src_shards, tgt_shards, align_shards, tag_shards)):
+                # yield (i, (ss, ts, a_s, maybe_id, filter_pred))    # wei 20200721
+                yield (i, (ss, ts, a_s, t_s, maybe_id, filter_pred))
+
+    # shard_iter = shard_iterator(srcs, tgts, ids, aligns, existing_shards,    # wei 20200721
+    shard_iter=shard_iterator(srcs, tgts, ids, aligns, tags, existing_shards,
                                 existing_fields, corpus_type, opt)
 
     with Pool(opt.num_threads) as p:
-        dataset_params = (corpus_type, fields, src_reader, tgt_reader,
+        # dataset_params = (corpus_type, fields, src_reader, tgt_reader,    # wei 20200721
+        dataset_params = (corpus_type, fields, src_reader, tgt_reader, tag_reader,
                           align_reader, opt, existing_fields,
                           src_vocab, tgt_vocab)
         func = partial(process_one_shard, dataset_params)
@@ -286,21 +307,27 @@ def preprocess(opt):
         tgt_nfeats,
         dynamic_dict=opt.dynamic_dict,
         with_align=opt.train_align[0] is not None,
+        # wei 20200721
+        with_tag=opt.train_nfr_tag[0] is not None,
+        # end wei
         src_truncate=opt.src_seq_length_trunc,
         tgt_truncate=opt.tgt_seq_length_trunc)
 
     src_reader = inputters.str2reader[opt.data_type].from_opt(opt)
     tgt_reader = inputters.str2reader["text"].from_opt(opt)
     align_reader = inputters.str2reader["text"].from_opt(opt)
+    # wei 20200721
+    tag_reader = inputters.str2reader["text"].from_opt(opt)
+    # end wei
 
     logger.info("Building & saving training data...")
     build_save_dataset(
-        'train', fields, src_reader, tgt_reader, align_reader, opt)
-
+        # 'train', fields, src_reader, tgt_reader, align_reader, opt)    # wei 20200721
+        'train', fields, src_reader, tgt_reader, tag_reader, align_reader, opt)
     if opt.valid_src and opt.valid_tgt:
         logger.info("Building & saving validation data...")
         build_save_dataset(
-            'valid', fields, src_reader, tgt_reader, align_reader, opt)
+            'valid', fields, src_reader, tgt_reader, tag_reader, align_reader, opt)
 
 
 def _get_parser():

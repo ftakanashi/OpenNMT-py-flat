@@ -90,7 +90,12 @@ class TransformerEncoder(EncoderBase):
     """
 
     def __init__(self, num_layers, d_model, heads, d_ff, dropout,
-                 attention_dropout, embeddings, max_relative_positions):
+                 attention_dropout, embeddings, max_relative_positions,
+                 # wei 20200723
+                 flat_layers,
+                 nfr_tag_mode, d_tag
+                 # end wei
+                 ):
         super(TransformerEncoder, self).__init__()
 
         self.embeddings = embeddings
@@ -100,6 +105,16 @@ class TransformerEncoder(EncoderBase):
                 max_relative_positions=max_relative_positions)
              for i in range(num_layers)])
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
+
+        self.flat_layers = flat_layers
+
+        # wei 20200723
+        self.nfr_tag_mode = nfr_tag_mode
+        self.d_tag = d_tag
+        if self.nfr_tag_mode in ('concat', 'add'):
+            TAG_TYPES = 3
+            self.nfr_tag_embedding = nn.Embedding(TAG_TYPES, self.d_tag)
+        # end wei
 
     @classmethod
     def from_opt(cls, opt, embeddings):
@@ -113,22 +128,63 @@ class TransformerEncoder(EncoderBase):
             opt.attention_dropout[0] if type(opt.attention_dropout)
             is list else opt.attention_dropout,
             embeddings,
-            opt.max_relative_positions)
+            opt.max_relative_positions,
+            # wei 20200723
+            opt.flat_layers,
+            opt.nfr_tag_mode, opt.nfr_tag_vec_size
+            # end wei
+        )
 
-    def forward(self, src, lengths=None):
+    def forward(self, src, lengths=None, **kwargs):
         """See :func:`EncoderBase.forward()`"""
         self._check_args(src, lengths)
 
-        emb = self.embeddings(src)
+        # emb = self.embeddings(src)    # wei 20200723
+        if self.flat_layers > 0:
+            emb, real_source_lengths = self.embeddings(src)
+        else:
+            emb = self.emebddings(src)
+            real_source_lengths = lengths    # dummy
 
         out = emb.transpose(0, 1).contiguous()
         mask = ~sequence_mask(lengths).unsqueeze(1)
-        # Run the forward pass of every layer of the tranformer.
-        for layer in self.transformer:
-            out = layer(out, mask)
-        out = self.layer_norm(out)
 
-        return emb, out.transpose(0, 1).contiguous(), lengths
+        # wei 20200723
+        # calculate for the NFR tag embeddings and incorporate them into tokens' representations
+        if self.nfr_tag_mode != 'none':
+            tags = kwargs.get('tag')
+            tag_emb = self.nfr_tag_embedding(tags)
+            if self.nfr_tag_mode == 'concat':
+                out = torch.cat((out, tag_emb), dim=2)
+            elif self.nfr_tag_mode == 'add':
+                out += tag_emb
+            else:
+                raise Exception('DUMMY')
+        # end wei
+
+        # wei 20200723
+        # feed forward procedure in flat setting
+        if self.flat_layers > 0:
+            max_full_attn_i = len(self.transformer) - self.flat_layers - 1
+            append_len = lengths.max() - real_source_lengths.max()
+            append_mask = torch.ones(mask.size(0), mask.size(1), append_len).type(torch.bool).to(mask.device)
+
+            # Run the forward pass of every layer of the tranformer.
+            for layer_n, layer in enumerate(self.transformer):
+                if layer_n > max_full_attn_i:
+                    mask = ~sequence_mask(real_source_lengths).unsqueeze(1)
+                    mask = torch.cat((mask, append_mask), dim=-1)
+                out = layer(out, mask)
+            out = self.layer_norm(out)
+            return emb, out.transpose(0, 1).contiguous(), real_source_lengths
+        # end wei
+
+        else:
+            # Run the forward pass of every layer of the tranformer.
+            for layer in self.transformer:
+                out = layer(out, mask)
+            out = self.layer_norm(out)
+            return emb, out.transpose(0, 1).contiguous(), lengths
 
     def update_dropout(self, dropout, attention_dropout):
         self.embeddings.update_dropout(dropout)

@@ -80,6 +80,33 @@ class ArgumentParser(cfargparse.ArgumentParser):
                             model_opt.alignment_heads,
                             model_opt.full_context_alignment))
 
+        # wei 20200711
+        if model_opt.layers > 0:
+            assert model_opt.flat_layers < model_opt.layers, 'Number of flat layers must be less than total layers.'
+        else:
+            assert model_opt.flat_layers < model_opt.encoder_layers, 'Number of flat layers must be less than total layers.'
+
+        if model_opt.flat_layers > 0:
+            assert model_opt.segment_embedding, 'Please add segment embedding if you want to adopt flat layers.'
+        # end wei
+
+        # wei 20200723
+        if model_opt.nfr_tag_mode == 'add':
+            if model_opt.word_vec_size > 0:
+                assert model_opt.nfr_tag_vec_size == model_opt.word_vec_size
+            else:
+                assert model_opt.nfr_tag_vec_size == model_opt.src_word_vec_size, \
+                "In add mode, tag_emb_size must equal to word_vec_size"
+
+        elif model_opt.nfr_tag_mode == 'concat':
+            wvs = model_opt.word_vec_size if model_opt.word_vec_size > 0 else model_opt.src_word_vec_size
+            assert model_opt.rnn_size == (model_opt.nfr_tag_vec_size + wvs), "In concat mode, hidden_size must equal" \
+                                                                             "to tag_emb_size + word_vec_size"
+
+        else:    # none
+            pass
+        # end wei
+
     @classmethod
     def ckpt_model_opts(cls, ckpt_opt):
         # Load default opt values, then overwrite with the opts in
@@ -140,7 +167,7 @@ class ArgumentParser(cfargparse.ArgumentParser):
         assert len(opt.train_src) == len(opt.train_ids), \
             "Please provide proper -train_ids for your data!"
 
-        assert len(opt.train_src_nfr_tag) == len(opt.train_src), \
+        assert len(opt.train_nfr_tag) == len(opt.train_src), \
             "Please provide same number of nfr tag and source train files!"
 
         for file in opt.train_src + opt.train_tgt:

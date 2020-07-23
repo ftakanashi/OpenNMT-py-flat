@@ -81,6 +81,29 @@ class AlignField(LabelField):
 
         return align_idx
 
+# wei 20200721
+class TagField(LabelField):
+
+    def __init__(self, **kwargs):
+        kwargs['use_vocab'] = False
+        kwargs['preprocessing'] = self._preprocess
+        super(TagField, self).__init__(**kwargs)
+
+    def _preprocess(self, x):
+        return [int(i) for i in x.strip().split()]
+
+    def process(self, batch, device=None):
+        R_TAG = 2    # the number stands for tag "R"(unrelated words)
+        lengths = [len(tokens) for tokens in batch]
+        max_len = max(lengths)
+        examples = []
+        for example in batch:
+            while len(example) < max_len:
+                example.append(R_TAG)
+            examples.append(example)
+
+        return torch.tensor(examples, dtype=self.dtype, device=device)
+# end wei
 
 def parse_align_idx(align_pharaoh):
     """
@@ -108,6 +131,9 @@ def get_fields(
     eos='</s>',
     dynamic_dict=False,
     with_align=False,
+    # wei 20200721
+    with_tag=False,
+    # end wei
     src_truncate=None,
     tgt_truncate=None
 ):
@@ -185,6 +211,12 @@ def get_fields(
     if with_align:
         word_align = AlignField()
         fields["align"] = word_align
+
+    # wei 20200721
+    if with_tag:
+        tag = TagField()
+        fields['tag'] = tag
+    # end wei
 
     return fields
 

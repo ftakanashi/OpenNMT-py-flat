@@ -82,6 +82,9 @@ def build_trainer(opt, device_id, model, fields, optim, model_saver=None):
                            n_gpu, gpu_rank,
                            gpu_verbose_level, report_manager,
                            with_align=True if opt.lambda_align > 0 else False,
+                           # wei 20200723
+                           train_with_nfr_tag=opt.nfr_tag_mode != 'none',
+                           # end wei
                            model_saver=model_saver if gpu_rank == 0 else None,
                            average_decay=average_decay,
                            average_every=average_every,
@@ -125,6 +128,9 @@ class Trainer(object):
                  accum_steps=[0],
                  n_gpu=1, gpu_rank=1, gpu_verbose_level=0,
                  report_manager=None, with_align=False, model_saver=None,
+                 # wei 20200723
+                 train_with_nfr_tag=False,
+                 # end wei
                  average_decay=0, average_every=1, model_dtype='fp32',
                  earlystopper=None, dropout=[0.3], dropout_steps=[0],
                  source_noise=None):
@@ -153,6 +159,10 @@ class Trainer(object):
         self.dropout = dropout
         self.dropout_steps = dropout_steps
         self.source_noise = source_noise
+
+        # wei 20200723
+        self.train_with_nfr_tag = train_with_nfr_tag
+        # end wei
 
         for i in range(len(self.accum_count_l)):
             assert self.accum_count_l[i] > 0
@@ -375,6 +385,17 @@ class Trainer(object):
 
             tgt_outer = batch.tgt
 
+            # wei 20200723
+            if self.train_with_nfr_tag:    # nfr_tag_mode != none
+                if not hasattr(batch, 'tag'):
+                    raise ValueError('Tag data is not found in processed data. Please add tag information or cancel'
+                                     'the train_with_nfr_tag flag.')
+                else:
+                    tag = batch.tag
+            else:
+                tag = None
+            # end wei
+
             bptt = False
             for j in range(0, target_size-1, trunc_size):
                 # 1. Create truncated target.
@@ -384,8 +405,16 @@ class Trainer(object):
                 if self.accum_count == 1:
                     self.optim.zero_grad()
 
-                outputs, attns = self.model(src, tgt, src_lengths, bptt=bptt,
-                                            with_align=self.with_align)
+                # wei 20200723
+                try:
+                    # only transformer encoder is adapted to accept NFR tag as input.
+                    outputs, attns = self.model(src, tgt, src_lengths, bptt=bptt,
+                               with_align=self.with_align, tag=tag)
+                except TypeError as e:
+                    outputs, attns = self.model(src, tgt, src_lengths, bptt=bptt,
+                               with_align=self.with_align)
+                # end wei
+
                 bptt = True
 
                 # 3. Compute loss.

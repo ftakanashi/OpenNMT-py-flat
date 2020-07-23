@@ -32,6 +32,14 @@ def model_opts(parser):
     group.add('--word_vec_size', '-word_vec_size', type=int, default=-1,
               help='Word embedding size for src and tgt.')
 
+    # wei 20200723
+    group.add('--nfr_tag_mode', '-nfr_tag_mode', choices=['none', 'add', 'concat'], default='none',
+              help='Mode indicating how to incorporate nfr tags into the model. If set to none,'
+                   'no nfr tags would be used.')
+    group.add('--nfr_tag_vec_size', '-nfr_tag_vec_size', type=int, default=4,
+              help='NFR tag embedding size. Default is 4 (te default value for concat mode)')
+    # end wei
+
     group.add('--share_decoder_embeddings', '-share_decoder_embeddings',
               action='store_true',
               help="Use a shared weight matrix for the input and "
@@ -74,10 +82,10 @@ def model_opts(parser):
               help='Data type of the model.')
 
     group.add('--encoder_type', '-encoder_type', type=str, default='rnn',
-              choices=['rnn', 'brnn', 'ggnn', 'mean', 'transformer', 'cnn', 'transformer_flat'],
+              choices=['rnn', 'brnn', 'ggnn', 'mean', 'transformer', 'cnn'],
               help="Type of encoder layer to use. Non-RNN layers "
                    "are experimental. Options are "
-                   "[rnn|brnn|ggnn|mean|transformer|cnn|transformer_flat].")
+                   "[rnn|brnn|ggnn|mean|transformer|cnn].")
     group.add('--decoder_type', '-decoder_type', type=str, default='rnn',
               choices=['rnn', 'transformer', 'cnn'],
               help="Type of decoder layer to use. Non-RNN layers "
@@ -248,8 +256,10 @@ def preprocess_opts(parser):
               help="Path(s) to the training src-tgt alignment")
     group.add('--train_ids', '-train_ids', nargs='+', default=[None],
               help="ids to name training shards, used for corpus weighting")
-    group.add('--train_src_nfr_tag', '-train_src_nfr_tag', nargs='+', default=[None],
-              help="NFR tags (S, T, R, etc.) specifying type of token in source sequence.")
+    # wei 20200721
+    group.add('--train_nfr_tag', '-train_nfr_tag', nargs='+', default=[None],
+              help="NFR tags (0,1,2 for S, T, R respectively) specifying type of token in source sequence.")
+    # end wei
 
     group.add('--valid_src', '-valid_src',
               help="Path to the validation source data")
