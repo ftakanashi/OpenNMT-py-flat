@@ -99,13 +99,19 @@ class ArgumentParser(cfargparse.ArgumentParser):
                 "In add mode, tag_emb_size must equal to word_vec_size"
 
         elif model_opt.nfr_tag_mode == 'concat':
-            wvs = model_opt.word_vec_size if model_opt.word_vec_size > 0 else model_opt.src_word_vec_size
+            assert model_opt.word_vec_size < 0
+            wvs = model_opt.src_word_vec_size
             assert model_opt.rnn_size == (model_opt.nfr_tag_vec_size + wvs), "In concat mode, hidden_size must equal" \
                                                                              "to tag_emb_size + word_vec_size"
+            # wei 20200724
+            assert model_opt.share_embeddings is False, "In concat mode, encoder and decoder have non-equal vector size" \
+                                                        "for encoder will incorporate extra tag embeddings. Do not" \
+                                                        "share embeddings."
+            # end 20200724
 
-        else:    # none
+        else:    # mode is none
             pass
-        # end wei
+        # end wei 20200723
 
     @classmethod
     def ckpt_model_opts(cls, ckpt_opt):

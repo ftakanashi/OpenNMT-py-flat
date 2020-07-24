@@ -99,6 +99,15 @@ class TransformerEncoder(EncoderBase):
         super(TransformerEncoder, self).__init__()
 
         self.embeddings = embeddings
+
+        # wei 20200723
+        self.nfr_tag_mode = nfr_tag_mode
+        self.d_tag = d_tag
+        if self.nfr_tag_mode in ('concat', 'add'):
+            TAG_TYPES = 3
+            self.nfr_tag_embedding = nn.Embedding(TAG_TYPES, self.d_tag)
+        # end wei
+
         self.transformer = nn.ModuleList(
             [TransformerEncoderLayer(
                 d_model, heads, d_ff, dropout, attention_dropout,
@@ -108,13 +117,7 @@ class TransformerEncoder(EncoderBase):
 
         self.flat_layers = flat_layers
 
-        # wei 20200723
-        self.nfr_tag_mode = nfr_tag_mode
-        self.d_tag = d_tag
-        if self.nfr_tag_mode in ('concat', 'add'):
-            TAG_TYPES = 3
-            self.nfr_tag_embedding = nn.Embedding(TAG_TYPES, self.d_tag)
-        # end wei
+
 
     @classmethod
     def from_opt(cls, opt, embeddings):
@@ -143,7 +146,7 @@ class TransformerEncoder(EncoderBase):
         if self.flat_layers > 0:
             emb, real_source_lengths = self.embeddings(src)
         else:
-            emb = self.emebddings(src)
+            emb = self.embeddings(src)
             real_source_lengths = lengths    # dummy
 
         out = emb.transpose(0, 1).contiguous()
@@ -192,64 +195,64 @@ class TransformerEncoder(EncoderBase):
             layer.update_dropout(dropout, attention_dropout)
 
 
-class TransformerFlatEncoder(EncoderBase):
-
-    def __init__(self, num_layers, d_model, heads, d_ff, dropout,
-                 attention_dropout, embeddings, max_relative_positions,
-                 flat_layers):
-        super(TransformerFlatEncoder, self).__init__()
-
-        self.embeddings = embeddings
-        self.transformer = nn.ModuleList(
-            [TransformerEncoderLayer(
-                d_model, heads, d_ff, dropout, attention_dropout,
-                max_relative_positions=max_relative_positions)
-             for i in range(num_layers)])
-        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
-
-        self.flat_layers = flat_layers
-        assert self.flat_layers > 0, 'number of flat layers must greater than 0'
-        assert self.flat_layers < num_layers, 'number of flat layers must less than total layers'
-
-    @classmethod
-    def from_opt(cls, opt, embeddings):
-        """Alternate constructor."""
-        return cls(
-            opt.enc_layers,
-            opt.enc_rnn_size,
-            opt.heads,
-            opt.transformer_ff,
-            opt.dropout[0] if type(opt.dropout) is list else opt.dropout,
-            opt.attention_dropout[0] if type(opt.attention_dropout)
-            is list else opt.attention_dropout,
-            embeddings,
-            opt.max_relative_positions,
-            opt.flat_layers)
-
-    def forward(self, src, lengths=None):
-        """See :func:`EncoderBase.forward()`"""
-        self._check_args(src, lengths)
-
-        emb, real_source_lengths = self.embeddings(src, output_real_source_lengths=True)
-
-        out = emb.transpose(0, 1).contiguous()
-        mask = ~sequence_mask(lengths).unsqueeze(1)
-
-        max_full_attn_i = len(self.transformer) - self.flat_layers - 1
-        append_len = lengths.max() - real_source_lengths.max()
-        append_mask = torch.ones(mask.size(0), mask.size(1), append_len).type(torch.bool).to(mask.device)
-
-        # Run the forward pass of every layer of the tranformer.
-        for layer_n, layer in enumerate(self.transformer):
-            if layer_n > max_full_attn_i:
-                mask = ~sequence_mask(real_source_lengths).unsqueeze(1)
-                mask = torch.cat((mask, append_mask), dim=-1)
-            out = layer(out, mask)
-        out = self.layer_norm(out)
-
-        return emb, out.transpose(0, 1).contiguous(), real_source_lengths
-
-    def update_dropout(self, dropout, attention_dropout):
-        self.embeddings.update_dropout(dropout)
-        for layer in self.transformer:
-            layer.update_dropout(dropout, attention_dropout)
+# class TransformerFlatEncoder(EncoderBase):
+#
+#     def __init__(self, num_layers, d_model, heads, d_ff, dropout,
+#                  attention_dropout, embeddings, max_relative_positions,
+#                  flat_layers):
+#         super(TransformerFlatEncoder, self).__init__()
+#
+#         self.embeddings = embeddings
+#         self.transformer = nn.ModuleList(
+#             [TransformerEncoderLayer(
+#                 d_model, heads, d_ff, dropout, attention_dropout,
+#                 max_relative_positions=max_relative_positions)
+#              for i in range(num_layers)])
+#         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
+#
+#         self.flat_layers = flat_layers
+#         assert self.flat_layers > 0, 'number of flat layers must greater than 0'
+#         assert self.flat_layers < num_layers, 'number of flat layers must less than total layers'
+#
+#     @classmethod
+#     def from_opt(cls, opt, embeddings):
+#         """Alternate constructor."""
+#         return cls(
+#             opt.enc_layers,
+#             opt.enc_rnn_size,
+#             opt.heads,
+#             opt.transformer_ff,
+#             opt.dropout[0] if type(opt.dropout) is list else opt.dropout,
+#             opt.attention_dropout[0] if type(opt.attention_dropout)
+#             is list else opt.attention_dropout,
+#             embeddings,
+#             opt.max_relative_positions,
+#             opt.flat_layers)
+#
+#     def forward(self, src, lengths=None):
+#         """See :func:`EncoderBase.forward()`"""
+#         self._check_args(src, lengths)
+#
+#         emb, real_source_lengths = self.embeddings(src, output_real_source_lengths=True)
+#
+#         out = emb.transpose(0, 1).contiguous()
+#         mask = ~sequence_mask(lengths).unsqueeze(1)
+#
+#         max_full_attn_i = len(self.transformer) - self.flat_layers - 1
+#         append_len = lengths.max() - real_source_lengths.max()
+#         append_mask = torch.ones(mask.size(0), mask.size(1), append_len).type(torch.bool).to(mask.device)
+#
+#         # Run the forward pass of every layer of the tranformer.
+#         for layer_n, layer in enumerate(self.transformer):
+#             if layer_n > max_full_attn_i:
+#                 mask = ~sequence_mask(real_source_lengths).unsqueeze(1)
+#                 mask = torch.cat((mask, append_mask), dim=-1)
+#             out = layer(out, mask)
+#         out = self.layer_norm(out)
+#
+#         return emb, out.transpose(0, 1).contiguous(), real_source_lengths
+#
+#     def update_dropout(self, dropout, attention_dropout):
+#         self.embeddings.update_dropout(dropout)
+#         for layer in self.transformer:
+#             layer.update_dropout(dropout, attention_dropout)

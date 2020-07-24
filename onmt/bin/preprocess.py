@@ -158,6 +158,9 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, tag_reader,
         tgts = [opt.valid_tgt]
         ids = [None]
         aligns = [opt.valid_align]
+        # wei 20200723
+        tags = [opt.valid_nfr_tag]
+        # end wei
 
     src_vocab, tgt_vocab, existing_fields = maybe_load_vocab(
         corpus_type, counters, opt)

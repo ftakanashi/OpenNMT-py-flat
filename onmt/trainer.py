@@ -344,9 +344,26 @@ class Trainer(object):
                                    else (batch.src, None)
                 tgt = batch.tgt
 
+                # wei 20200724
+                if self.train_with_nfr_tag:
+                    if not hasattr(batch, 'tag'):
+                        raise ValueError('Valid tag data is not found in processed data. Please add tag information'
+                                         'or set nfr_tag_mode to none.')
+                    else:
+                        tag = batch.tag
+                else:
+                    tag = None
+                # end wei
+
                 # F-prop through the model.
-                outputs, attns = valid_model(src, tgt, src_lengths,
-                                             with_align=self.with_align)
+                # wei 20200724
+                try:
+                    outputs, attns = valid_model(src, tgt, src_lengths,
+                                                 with_align=self.with_align, tag=tag)
+                except TypeError as e:
+                    outputs, attns = valid_model(src, tgt, src_lengths,
+                                                 with_align=self.with_align)
+                # end wei
 
                 # Compute loss.
                 _, batch_stats = self.valid_loss(batch, outputs, attns)
@@ -388,8 +405,8 @@ class Trainer(object):
             # wei 20200723
             if self.train_with_nfr_tag:    # nfr_tag_mode != none
                 if not hasattr(batch, 'tag'):
-                    raise ValueError('Tag data is not found in processed data. Please add tag information or cancel'
-                                     'the train_with_nfr_tag flag.')
+                    raise ValueError('Train tag data is not found in processed data. Please add tag information or'
+                                     'set nfr_tag_mode to none.')
                 else:
                     tag = batch.tag
             else:

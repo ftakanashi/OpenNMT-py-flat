@@ -267,6 +267,10 @@ def preprocess_opts(parser):
               help="Path to the validation target data")
     group.add('--valid_align', '-valid_align', default=None,
               help="Path(s) to the validation src-tgt alignment")
+    # wei 20200723
+    group.add('--valid_nfr_tag', '-valid_nfr_tag', default=None,
+              help='NFR tags for validation data. Same format as train_nfr_tag.')
+    # end wei
 
     group.add('--src_dir', '-src_dir', default="",
               help="Source directory for image or audio files.")

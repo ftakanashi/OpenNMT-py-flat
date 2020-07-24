@@ -40,7 +40,7 @@ Default N is -1, which means that no flat layers are adopted.
 Note. N is a integer and -1 <= N <= --layers(number of encoder layers)
 
 ## NFR tag
-Add option "--train_nfr_tag FILE" during preprocessing.
+Add option "--train_nfr_tag FILE" and "--valid_nfr_tag FILE" during preprocessing.
 
 Add option '--nfr_tag_mode \[none \| concat \| add\]' and "--nfr_tag_vec_size D" during training.
 
@@ -55,7 +55,9 @@ Three modes are supported in --nfr_tag_mode option.
 - "none" means no nfr tags should be used. 
 - "concat" means that tags will be transferred to a
 tag embedding vector which will be concatenated with the token embedding.
-Note that in this case, hidden_size = tag_emb_size + token_emb_size
+Note that in this case, hidden_size = tag_emb_size + token_emb_size **IN ENCODER**. Also, because of the discrepancy
+between the encoder's tok_emb_size and the decoder's one which needs no tag_emb so that will be equal to hidden_size,
+share embedding is not supported if nfr_tag_mode is set to concat.
 - "add" means that tags are also transferred to vector but
 the size is equal to the token embedding. And tag embedding will
 be directly added to the token embedding.
