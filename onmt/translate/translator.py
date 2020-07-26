@@ -107,6 +107,9 @@ class Translator(object):
             model,
             fields,
             src_reader,
+            # wei 20200726
+            tag_reader,
+            # end wei
             tgt_reader,
             gpu=-1,
             n_best=1,
@@ -164,6 +167,9 @@ class Translator(object):
         self._exclusion_idxs = {
             self._tgt_vocab.stoi[t] for t in self.ignore_when_blocking}
         self.src_reader = src_reader
+        # wei 20200726
+        self.tag_reader = tag_reader
+        # end wei
         self.tgt_reader = tgt_reader
         self.replace_unk = replace_unk
         if self.replace_unk and not self.model.decoder.attentional:
@@ -233,11 +239,17 @@ class Translator(object):
         """
 
         src_reader = inputters.str2reader[opt.data_type].from_opt(opt)
+        # wei 20200726
+        tag_reader = inputters.str2reader["text"].from_opt(opt)
+        # end wei
         tgt_reader = inputters.str2reader["text"].from_opt(opt)
         return cls(
             model,
             fields,
             src_reader,
+            # wei 20200726
+            tag_reader,
+            # end wei
             tgt_reader,
             gpu=opt.gpu,
             n_best=opt.n_best,
@@ -285,6 +297,9 @@ class Translator(object):
     def translate(
             self,
             src,
+            # wei 20200726
+            tag=None,
+            # end wei
             tgt=None,
             src_dir=None,
             batch_size=None,
@@ -318,9 +333,13 @@ class Translator(object):
             raise ValueError('Prefix should be feed to tgt if -tgt_prefix.')
 
         src_data = {"reader": self.src_reader, "data": src, "dir": src_dir}
+        # wei 20200726
+        tag_data = {"reader": self.tag_reader, "data": tag, "dir": None}
+        # end wei
         tgt_data = {"reader": self.tgt_reader, "data": tgt, "dir": None}
         _readers, _data, _dir = inputters.Dataset.config(
-            [('src', src_data), ('tgt', tgt_data)])
+            # [('src', src_data), ('tgt', tgt_data)])    # wei 20200726
+            [('src', src_data), ('tag', tag_data), ('tgt', tgt_data)])
 
         # corpus_id field is useless here
         if self.fields.get("corpus_id", None) is not None:
@@ -555,7 +574,8 @@ class Translator(object):
                            else (batch.src, None)
 
         enc_states, memory_bank, src_lengths = self.model.encoder(
-            src, src_lengths)
+            # src, src_lengths)    # wei 20200726
+            src, src_lengths, tag=batch.tag)
         if src_lengths is None:
             assert not isinstance(memory_bank, tuple), \
                 'Ensemble decoding only supported for text data'
