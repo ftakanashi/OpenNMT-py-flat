@@ -44,6 +44,8 @@ Add option "--train_nfr_tag FILE" and "--valid_nfr_tag FILE" during preprocessin
 
 Add option '--nfr_tag_mode \[none \| concat \| add\]' and "--nfr_tag_vec_size D" during training.
 
+Add option '--src_nfr_tag FILE' during testing.
+
 --train_nfr_tag requires a file which has equal lines and tokens
 as the -train_src file. Every token in the tag file is 0, 1 or 2 and corresponds
 to the token in training source corpus at the same position.
