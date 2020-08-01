@@ -75,6 +75,19 @@ def build_trainer(opt, device_id, model, fields, optim, model_saver=None):
             device_id=device_id
         )
 
+    # wei 20200731
+    _flat_options = None
+    if opt.flat_options is not None:
+        assert len(opt.flat_options) > 0
+        _flat_options = []
+        for flat_option in opt.flat_options:
+            try:
+                _flat_options.append(int(flat_option))    # number tag is recommended
+            except ValueError as e:
+                _flat_options.append(flat_option)
+
+    # end wei
+
     report_manager = onmt.utils.build_report_manager(opt, gpu_rank)
     trainer = onmt.Trainer(model, train_loss, valid_loss, optim, trunc_size,
                            shard_size, norm_method,
@@ -82,6 +95,10 @@ def build_trainer(opt, device_id, model, fields, optim, model_saver=None):
                            n_gpu, gpu_rank,
                            gpu_verbose_level, report_manager,
                            with_align=True if opt.lambda_align > 0 else False,
+                           # wei 20200730
+                           train_with_flat_tag=opt.flat_layers > 0,
+                           train_flat_options=_flat_options,
+                           # end wei
                            # wei 20200723
                            train_with_nfr_tag=opt.nfr_tag_mode != 'none',
                            # end wei
@@ -128,6 +145,10 @@ class Trainer(object):
                  accum_steps=[0],
                  n_gpu=1, gpu_rank=1, gpu_verbose_level=0,
                  report_manager=None, with_align=False, model_saver=None,
+                 # wei 20200730
+                 train_with_flat_tag=False,
+                 train_flat_options=None,
+                 # end wei
                  # wei 20200723
                  train_with_nfr_tag=False,
                  # end wei
@@ -160,7 +181,9 @@ class Trainer(object):
         self.dropout_steps = dropout_steps
         self.source_noise = source_noise
 
-        # wei 20200723
+        # wei 20200730
+        self.train_with_flat_tag = train_with_flat_tag
+        self.train_flat_options = train_flat_options
         self.train_with_nfr_tag = train_with_nfr_tag
         # end wei
 
@@ -344,25 +367,53 @@ class Trainer(object):
                                    else (batch.src, None)
                 tgt = batch.tgt
 
+                # wei 20200731
+                flat_tag = None
+                if self.train_with_flat_tag:
+                    if not hasattr(batch, 'flat_tag'):
+                        raise ValueError('Valid flat tag data is not found in processed data. Please add tag '
+                                         'information or set flat_layers < 0 to cancel flat-transformer training.')
+                    else:
+                        flat_tag = batch.flat_tag
+                # end wei
+
                 # wei 20200724
+                nfr_tag = None
                 if self.train_with_nfr_tag:
-                    if not hasattr(batch, 'tag'):
-                        raise ValueError('Valid tag data is not found in processed data. Please add tag information'
+                    if not hasattr(batch, 'nfr_tag'):
+                        raise ValueError('Valid NFR tag data is not found in processed data. Please add tag information'
                                          'or set nfr_tag_mode to none.')
                     else:
-                        tag = batch.tag
-                else:
-                    tag = None
+                        nfr_tag = batch.nfr_tag
+                # end wei
+
+                # wei 20200731
+                extra_for_enc = \
+                    {
+                        'flat_tag': flat_tag,
+                        'flat_options': self.train_flat_options,
+                        'nfr_tag': nfr_tag
+                    }
+                extra_for_dec = \
+                    {
+                        'flat_tag': flat_tag,
+                        'flat_options': self.train_flat_options
+                    }
+
+                outputs, attns = valid_model(src, tgt, src_lengths,
+                                             with_align=self.with_align,
+                                             extra_for_enc=extra_for_enc,
+                                             extra_for_dec=extra_for_dec)
                 # end wei
 
                 # F-prop through the model.
                 # wei 20200724
-                try:
-                    outputs, attns = valid_model(src, tgt, src_lengths,
-                                                 with_align=self.with_align, tag=tag)
-                except TypeError as e:
-                    outputs, attns = valid_model(src, tgt, src_lengths,
-                                                 with_align=self.with_align)
+                # try:
+                #     outputs, attns = valid_model(src, tgt, src_lengths,
+                #                                  with_align=self.with_align, tag=tag)
+                # except TypeError as e:
+                #     outputs, attns = valid_model(src, tgt, src_lengths,
+                #                                  with_align=self.with_align)
                 # end wei
 
                 # Compute loss.
@@ -402,15 +453,25 @@ class Trainer(object):
 
             tgt_outer = batch.tgt
 
+            # wei 20200730
+            flat_tag = None
+            if self.train_with_flat_tag:
+                if not hasattr(batch, 'flat_tag'):
+                    raise ValueError('Flat tag data is not found in processed data. Please add tag information or'
+                                     'set flat_layers < 0 to cancel flat-transformer training.')
+                else:
+                    flat_tag = batch.flat_tag
+            # end wei
+
             # wei 20200723
-            if self.train_with_nfr_tag:    # nfr_tag_mode != none
-                if not hasattr(batch, 'tag'):
-                    raise ValueError('Train tag data is not found in processed data. Please add tag information or'
+            nfr_tag = None
+            if self.train_with_nfr_tag:    # when nfr_tag_mode != none, preprocessed data must contains nfr_tag
+                if not hasattr(batch, 'nfr_tag'):
+                    raise ValueError('NFR tag data is not found in processed data. Please add tag information or'
                                      'set nfr_tag_mode to none.')
                 else:
-                    tag = batch.tag
-            else:
-                tag = None
+                    nfr_tag = batch.nfr_tag
+
             # end wei
 
             bptt = False
@@ -422,14 +483,23 @@ class Trainer(object):
                 if self.accum_count == 1:
                     self.optim.zero_grad()
 
-                # wei 20200723
-                try:
-                    # only transformer encoder is adapted to accept NFR tag as input.
-                    outputs, attns = self.model(src, tgt, src_lengths, bptt=bptt,
-                               with_align=self.with_align, tag=tag)
-                except TypeError as e:
-                    outputs, attns = self.model(src, tgt, src_lengths, bptt=bptt,
-                               with_align=self.with_align)
+                # wei 20200730
+                # some extra data that needs to be passed to model during training
+                extra_for_enc = \
+                    {
+                        'flat_tag': flat_tag,
+                        'flat_options': self.train_flat_options,
+                        'nfr_tag': nfr_tag
+                    }
+                extra_for_dec = \
+                    {
+                        'flat_tag': flat_tag,    # decoder also needs flat_tag to generate proper context-attn mask
+                        'flat_options': self.train_flat_options
+                    }
+
+                outputs, attns = self.model(src, tgt, src_lengths, bptt=bptt, with_align=self.with_align,
+                                            extra_for_enc=extra_for_enc,
+                                            extra_for_dec=extra_for_dec)
                 # end wei
 
                 bptt = True

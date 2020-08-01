@@ -95,6 +95,11 @@ def model_opts(parser):
     group.add('--flat_layers', '-flat_layers', type=int, default=-1,
               help='Specify the number of top encoder layers in a flat encoder.'
                    'Default value is -1 which means non-flat encoder.')
+    # wei 20200730
+    group.add('--flat_options', '-flat_options', nargs='+', default=None,
+              help='A list of tag options. Only to the tokens which have the specified option'
+                   'tag, the attention is payed.')
+    # end wei
 
     group.add('--layers', '-layers', type=int, default=-1,
               help='Number of layers in enc/dec.')
@@ -260,6 +265,10 @@ def preprocess_opts(parser):
     group.add('--train_nfr_tag', '-train_nfr_tag', nargs='+', default=[None],
               help="NFR tags (0,1,2 for S, T, R respectively) specifying type of token in source sequence.")
     # end wei
+    # wei 20200730
+    group.add('--train_flat_tag', '-flat_tag', nargs='+', default=[None],
+              help='A tag file in which unique tags correspond to every input token.')
+    # end wei
 
     group.add('--valid_src', '-valid_src',
               help="Path to the validation source data")
@@ -270,6 +279,10 @@ def preprocess_opts(parser):
     # wei 20200723
     group.add('--valid_nfr_tag', '-valid_nfr_tag', default=None,
               help='NFR tags for validation data. Same format as train_nfr_tag.')
+    # end wei
+    # wei 20200730
+    group.add('--valid_flat_tag', '-valid_flat_tag', default=None,
+              help='Reference to train_flat_tag.')
     # end wei
 
     group.add('--src_dir', '-src_dir', default="",

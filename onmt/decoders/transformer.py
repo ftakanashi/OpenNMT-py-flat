@@ -8,7 +8,7 @@ import torch.nn as nn
 from onmt.decoders.decoder import DecoderBase
 from onmt.modules import MultiHeadedAttention, AverageAttention
 from onmt.modules.position_ffn import PositionwiseFeedForward
-from onmt.utils.misc import sequence_mask
+from onmt.utils.misc import sequence_mask, sequence_mask_by_tag
 
 
 class TransformerDecoderLayer(nn.Module):
@@ -302,7 +302,15 @@ class TransformerDecoder(DecoderBase):
         pad_idx = self.embeddings.word_padding_idx
         src_lens = kwargs["memory_lengths"]
         src_max_len = self.state["src"].shape[0]
-        src_pad_mask = ~sequence_mask(src_lens, src_max_len).unsqueeze(1)
+        # src_pad_mask = ~sequence_mask(src_lens, src_max_len).unsqueeze(1)    # wei 20200731
+        # wei 20200731
+        if kwargs.get('flat_tag') is not None:
+            flat_tag = kwargs.get('flat_tag')
+            flat_options = kwargs.get('flat_options')    # validation is done in encoder
+            src_pad_mask = ~sequence_mask_by_tag(flat_tag, flat_options).unsqueeze(1)
+        else:
+            src_pad_mask = ~sequence_mask(src_lens, src_max_len).unsqueeze(1)
+        # end wei
         tgt_pad_mask = tgt_words.data.eq(pad_idx).unsqueeze(1)  # [B, 1, T_tgt]
 
         with_align = kwargs.pop('with_align', False)

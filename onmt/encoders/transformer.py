@@ -8,7 +8,7 @@ import torch.nn as nn
 from onmt.encoders.encoder import EncoderBase
 from onmt.modules import MultiHeadedAttention
 from onmt.modules.position_ffn import PositionwiseFeedForward
-from onmt.utils.misc import sequence_mask
+from onmt.utils.misc import sequence_mask, sequence_mask_by_tag
 
 
 class TransformerEncoderLayer(nn.Module):
@@ -91,8 +91,8 @@ class TransformerEncoder(EncoderBase):
 
     def __init__(self, num_layers, d_model, heads, d_ff, dropout,
                  attention_dropout, embeddings, max_relative_positions,
-                 # wei 20200723
-                 flat_layers,
+                 # wei 20200730
+                 flat_layers, flat_options,
                  nfr_tag_mode, d_tag
                  # end wei
                  ):
@@ -100,11 +100,16 @@ class TransformerEncoder(EncoderBase):
 
         self.embeddings = embeddings
 
+        # wei 20200730
+        self.flat_layers = flat_layers
+        self.flat_options = flat_options
+        # end wei
+
         # wei 20200723
         self.nfr_tag_mode = nfr_tag_mode
         self.d_tag = d_tag
         if self.nfr_tag_mode in ('concat', 'add'):
-            TAG_TYPES = 3
+            TAG_TYPES = 3   # S, T, R
             self.nfr_tag_embedding = nn.Embedding(TAG_TYPES, self.d_tag)
         # end wei
 
@@ -114,9 +119,6 @@ class TransformerEncoder(EncoderBase):
                 max_relative_positions=max_relative_positions)
              for i in range(num_layers)])
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
-
-        self.flat_layers = flat_layers
-
 
 
     @classmethod
@@ -132,8 +134,8 @@ class TransformerEncoder(EncoderBase):
             is list else opt.attention_dropout,
             embeddings,
             opt.max_relative_positions,
-            # wei 20200723
-            opt.flat_layers,
+            # wei 20200730
+            opt.flat_layers, opt.flat_options,
             opt.nfr_tag_mode, opt.nfr_tag_vec_size
             # end wei
         )
@@ -142,12 +144,7 @@ class TransformerEncoder(EncoderBase):
         """See :func:`EncoderBase.forward()`"""
         self._check_args(src, lengths)
 
-        # emb = self.embeddings(src)    # wei 20200723
-        if self.flat_layers > 0:
-            emb, real_source_lengths = self.embeddings(src)
-        else:
-            emb = self.embeddings(src)
-            real_source_lengths = lengths    # dummy
+        emb = self.embeddings(src)
 
         out = emb.transpose(0, 1).contiguous()
         mask = ~sequence_mask(lengths).unsqueeze(1)
@@ -155,8 +152,8 @@ class TransformerEncoder(EncoderBase):
         # wei 20200723
         # calculate for the NFR tag embeddings and incorporate them into tokens' representations
         if self.nfr_tag_mode != 'none':
-            tags = kwargs.get('tag')
-            tag_emb = self.nfr_tag_embedding(tags)
+            nfr_tags = kwargs.get('nfr_tag')
+            tag_emb = self.nfr_tag_embedding(nfr_tags)
             if self.nfr_tag_mode == 'concat':
                 out = torch.cat((out, tag_emb), dim=2)
             elif self.nfr_tag_mode == 'add':
@@ -165,21 +162,39 @@ class TransformerEncoder(EncoderBase):
                 raise Exception('DUMMY')
         # end wei
 
-        # wei 20200723
+        # wei 20200731
         # feed forward procedure in flat setting
         if self.flat_layers > 0:
-            max_full_attn_i = len(self.transformer) - self.flat_layers - 1
-            append_len = lengths.max() - real_source_lengths.max()
-            append_mask = torch.ones(mask.size(0), mask.size(1), append_len).type(torch.bool).to(mask.device)
+            flat_tags = kwargs.get('flat_tag')
+            flat_options = kwargs.get('flat_options')
+            assert flat_tags is not None and flat_options is not None, 'If flat setting is activated, please provide' \
+                                                                       'flat tags and flat options.'
 
-            # Run the forward pass of every layer of the tranformer.
+            max_full_attn_i = len(self.transformer) - self.flat_layers - 1
             for layer_n, layer in enumerate(self.transformer):
                 if layer_n > max_full_attn_i:
-                    mask = ~sequence_mask(real_source_lengths).unsqueeze(1)
-                    mask = torch.cat((mask, append_mask), dim=-1)
+                    mask = ~sequence_mask_by_tag(flat_tags, flat_options).unsqueeze(1)
                 out = layer(out, mask)
             out = self.layer_norm(out)
-            return emb, out.transpose(0, 1).contiguous(), real_source_lengths
+            return emb, out.transpose(0, 1).contiguous(), lengths
+
+        # end wei
+
+        # wei 20200723
+        # feed forward procedure in flat setting
+        # if self.flat_layers > 0:
+        #     max_full_attn_i = len(self.transformer) - self.flat_layers - 1
+        #     append_len = lengths.max() - real_source_lengths.max()
+        #     append_mask = torch.ones(mask.size(0), mask.size(1), append_len).type(torch.bool).to(mask.device)
+        #
+        #     # Run the forward pass of every layer of the tranformer.
+        #     for layer_n, layer in enumerate(self.transformer):
+        #         if layer_n > max_full_attn_i:
+        #             mask = ~sequence_mask(real_source_lengths).unsqueeze(1)
+        #             mask = torch.cat((mask, append_mask), dim=-1)
+        #         out = layer(out, mask)
+        #     out = self.layer_norm(out)
+        #     return emb, out.transpose(0, 1).contiguous(), real_source_lengths
         # end wei
 
         else:

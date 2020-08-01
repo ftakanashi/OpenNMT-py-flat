@@ -52,6 +52,19 @@ def sequence_mask(lengths, max_len=None):
             .repeat(batch_size, 1)
             .lt(lengths.unsqueeze(1)))
 
+# wei 20200731
+def sequence_mask_by_tag(tags, options):
+    '''
+    Creates a boolean mask for input depending on tags.
+    Only tags included in options will be unmasked.
+    '''
+    mask = torch.zeros_like(tags)
+    for opt in options:
+        mask[tags == opt] = 1
+
+    return mask.eq(1)
+
+# end wei
 
 def tile(x, count, dim=0):
     """

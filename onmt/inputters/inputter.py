@@ -131,8 +131,11 @@ def get_fields(
     eos='</s>',
     dynamic_dict=False,
     with_align=False,
+    # wei 20200730
+    with_flat_tag=False,
+    # end wei
     # wei 20200721
-    with_tag=False,
+    with_nfr_tag=False,
     # end wei
     src_truncate=None,
     tgt_truncate=None
@@ -213,9 +216,15 @@ def get_fields(
         fields["align"] = word_align
 
     # wei 20200721
-    if with_tag:
-        tag = TagField()
-        fields['tag'] = tag
+    if with_nfr_tag:
+        nfr_tag = TagField()
+        fields['nfr_tag'] = nfr_tag
+    # end wei
+
+    # wei 20200730
+    if with_flat_tag:
+        flat_tag = TagField()
+        fields['flat_tag'] = flat_tag
     # end wei
 
     return fields

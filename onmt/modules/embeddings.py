@@ -296,8 +296,6 @@ class Embeddings(nn.Module):
         if self.seg_token_id is not None:
             source += seg_emb
 
-        if self.flat_layer_flag > 0:    # when at least one layer is flat, output the real source lengths
-            return source, real_source_lengths
         return source
 
     def update_dropout(self, dropout):

@@ -50,7 +50,7 @@ def process_one_shard(corpus_params, params):
     corpus_type, fields, src_reader, tgt_reader, tag_reader, align_reader, opt, \
         existing_fields, src_vocab, tgt_vocab = corpus_params
     # i, (src_shard, tgt_shard, align_shard, maybe_id, filter_pred) = params    # wei 20200721
-    i, (src_shard, tgt_shard, align_shard, tag_shard, maybe_id, filter_pred) = params
+    i, (src_shard, tgt_shard, align_shard, nfr_tag_shard, flat_tag_shard, maybe_id, filter_pred) = params
     # create one counter per shard
     sub_sub_counter = defaultdict(Counter)
     assert len(src_shard) == len(tgt_shard)
@@ -60,11 +60,15 @@ def process_one_shard(corpus_params, params):
     tgt_data = {"reader": tgt_reader, "data": tgt_shard, "dir": None}
     align_data = {"reader": align_reader, "data": align_shard, "dir": None}
     # wei 20200721
-    tag_data = {'reader': tag_reader, 'data': tag_shard, 'dir': None}
+    nfr_tag_data = {'reader': tag_reader, 'data': nfr_tag_shard, 'dir': None}
+    # end wei
+    # wei 20200730
+    flat_tag_data = {'reader': tag_reader, 'data': flat_tag_shard, 'dir': None}
     # end wei
     _readers, _data, _dir = inputters.Dataset.config(
-        # [('src', src_data), ('tgt', tgt_data), ('align', align_data)])
-        [('src', src_data), ('tgt', tgt_data), ('align', align_data), ('tag', tag_data)])
+        # [('src', src_data), ('tgt', tgt_data), ('align', align_data)])    # wei 20200723
+        [('src', src_data), ('tgt', tgt_data), ('align', align_data), ('nfr_tag', nfr_tag_data),
+         ('flat_tag', flat_tag_data)])    # 20200730
 
     dataset = inputters.Dataset(
         fields, readers=_readers, data=_data, dirs=_dir,
@@ -149,7 +153,10 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, tag_reader,
         ids = opt.train_ids
         aligns = opt.train_align
         # wei 20200721
-        tags = opt.train_nfr_tag
+        nfr_tags = opt.train_nfr_tag
+        # end wei
+        # wei 20200730
+        flat_tags = opt.train_flat_tag
         # end wei
 
     elif corpus_type == 'valid':
@@ -159,7 +166,10 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, tag_reader,
         ids = [None]
         aligns = [opt.valid_align]
         # wei 20200723
-        tags = [opt.valid_nfr_tag]
+        nfr_tags = [opt.valid_nfr_tag]
+        # end wei
+        # wei 20200730
+        flat_tags = [opt.valid_flat_tag]
         # end wei
 
     src_vocab, tgt_vocab, existing_fields = maybe_load_vocab(
@@ -173,12 +183,13 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, tag_reader,
         return
 
     # def shard_iterator(srcs, tgts, ids, aligns, existing_shards,    # wei 20200721
-    def shard_iterator(srcs, tgts, ids, aligns, tags, existing_shards,
+    # def shard_iterator(srcs, tgts, ids, aligns, tags, existing_shards,    # wei 20200730
+    def shard_iterator(srcs, tgts, ids, aligns, nfr_tags, flat_tags, existing_shards,
                        existing_fields, corpus_type, opt):
         """
         Builds a single iterator yielding every shard of every corpus.
         """
-        for src, tgt, maybe_id, maybe_align, tag in zip(srcs, tgts, ids, aligns, tags):
+        for src, tgt, maybe_id, maybe_align, nfr_tag, flat_tag in zip(srcs, tgts, ids, aligns, nfr_tags, flat_tags):
             if maybe_id in existing_shards:
                 if opt.overwrite:
                     logger.warning("Overwrite shards for corpus {}"
@@ -206,18 +217,24 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, tag_reader,
             tgt_shards = split_corpus(tgt, opt.shard_size)
             align_shards = split_corpus(maybe_align, opt.shard_size)
             # wei 20200721
-            tag_shards = split_corpus(tag, opt.shard_size)
+            nfr_tag_shards = split_corpus(nfr_tag, opt.shard_size)
+            # end wei
+            # wei 20200730
+            flat_tag_shards = split_corpus(flat_tag, opt.shard_size)
             # end wei
 
             # for i, (ss, ts, a_s) in enumerate(    # wei 20200721
-            for i, (ss, ts, a_s, t_s) in enumerate(
+            for i, (ss, ts, a_s, n_t_s, f_t_s) in enumerate(
                     # zip(src_shards, tgt_shards, align_shards)):    # wei 20200721
-                    zip(src_shards, tgt_shards, align_shards, tag_shards)):
+                    # zip(src_shards, tgt_shards, align_shards, tag_shards)):    # wei 20200730
+                    zip(src_shards, tgt_shards, align_shards, nfr_tag_shards, flat_tag_shards)):
                 # yield (i, (ss, ts, a_s, maybe_id, filter_pred))    # wei 20200721
-                yield (i, (ss, ts, a_s, t_s, maybe_id, filter_pred))
+                # yield (i, (ss, ts, a_s, t_s, maybe_id, filter_pred))    # wei 20200730
+                yield (i, (ss, ts, a_s, n_t_s, f_t_s, maybe_id, filter_pred))
 
     # shard_iter = shard_iterator(srcs, tgts, ids, aligns, existing_shards,    # wei 20200721
-    shard_iter=shard_iterator(srcs, tgts, ids, aligns, tags, existing_shards,
+    # shard_iter=shard_iterator(srcs, tgts, ids, aligns, tags, existing_shards,    # wei 20200730
+    shard_iter=shard_iterator(srcs, tgts, ids, aligns, nfr_tags, flat_tags, existing_shards,
                                 existing_fields, corpus_type, opt)
 
     with Pool(opt.num_threads) as p:
@@ -310,8 +327,11 @@ def preprocess(opt):
         tgt_nfeats,
         dynamic_dict=opt.dynamic_dict,
         with_align=opt.train_align[0] is not None,
+        # wei 20200730
+        with_flat_tag=opt.train_flat_tag[0] is not None,
+        # end wei
         # wei 20200721
-        with_tag=opt.train_nfr_tag[0] is not None,
+        with_nfr_tag=opt.train_nfr_tag[0] is not None,
         # end wei
         src_truncate=opt.src_seq_length_trunc,
         tgt_truncate=opt.tgt_seq_length_trunc)

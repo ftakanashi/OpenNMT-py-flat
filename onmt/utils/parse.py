@@ -88,6 +88,10 @@ class ArgumentParser(cfargparse.ArgumentParser):
 
         if model_opt.flat_layers > 0:
             assert model_opt.segment_embedding, 'Please add segment embedding if you want to adopt flat layers.'
+            # wei 20200730
+            assert model_opt.flat_options is not None, 'At least one option of tag should be specified.'
+            # end wei
+
         # end wei
 
         # wei 20200723

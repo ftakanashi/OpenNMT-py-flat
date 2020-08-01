@@ -43,23 +43,24 @@ class NMTModel(nn.Module):
         """
         dec_in = tgt[:-1]  # exclude last target from inputs
 
-        # wei 20200723
-        tag = kwargs.get('tag')
-        # end wei
-
-        # enc_state, memory_bank, lengths = self.encoder(src, lengths)    # wei 20200723
-        if tag is not None:
-            enc_state, memory_bank, lengths = self.encoder(src, lengths, tag=tag)
-        else:
+        # wei 20200730
+        extra_for_enc = kwargs.get('extra_for_enc', {})
+        extra_for_dec = kwargs.get('extra_for_dec', {})
+        if len(extra_for_enc) == 0:
+            # no any extra data. call the encoder in the original OpenNMT-py way
             enc_state, memory_bank, lengths = self.encoder(src, lengths)
-        # end wei
+        else:
+            # notice that only TransformerEncoder support **kwargs
+            enc_state, memory_bank, lengths = self.encoder(src, lengths, **extra_for_enc)
 
         if bptt is False:
             self.decoder.init_state(src, memory_bank, enc_state)
         dec_out, attns = self.decoder(dec_in, memory_bank,
                                       memory_lengths=lengths,
-                                      with_align=with_align)
+                                      with_align=with_align,
+                                      **extra_for_dec)
         return dec_out, attns
+        # end wei
 
     def update_dropout(self, dropout):
         self.encoder.update_dropout(dropout)
