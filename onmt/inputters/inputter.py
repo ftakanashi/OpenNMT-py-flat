@@ -81,13 +81,13 @@ class AlignField(LabelField):
 
         return align_idx
 
-# wei 20200721
-class TagField(LabelField):
+# wei 20200805
+class NFRTagField(LabelField):
 
     def __init__(self, **kwargs):
         kwargs['use_vocab'] = False
         kwargs['preprocessing'] = self._preprocess
-        super(TagField, self).__init__(**kwargs)
+        super(NFRTagField, self).__init__(**kwargs)
 
     def _preprocess(self, x):
         return [int(i) for i in x.strip().split()]
@@ -100,6 +100,33 @@ class TagField(LabelField):
         for example in batch:
             while len(example) < max_len:
                 example.append(R_TAG)
+            examples.append(example)
+
+        return torch.tensor(examples, dtype=self.dtype, device=device)
+# end wei
+
+# wei 20200805
+# for [PAD] tokens in a batch, flat tag desires a different tag rather than 2 for R words in NFR's case.
+# so I create a new class but only change the PAD_TAG's value
+class FlatTagField(LabelField):
+
+    def __init__(self, **kwargs):
+        kwargs['use_vocab'] = False
+        kwargs['preprocessing'] = self._preprocess
+        super(FlatTagField, self).__init__(**kwargs)
+
+    def _preprocess(self, x):
+        return [int(i) for i in x.strip().split()]
+
+    def process(self, batch, device=None):
+        PAD_TAG = 4    # 0 for source, 1 for relate words in FM(T words), 2 for unrelated (R words)
+        # 3 for concat symbol @@@. Then set 4 for [PAD] in a batch.
+        lengths = [len(tokens) for tokens in batch]
+        max_len = max(lengths)
+        examples = []
+        for example in batch:
+            while len(example) < max_len:
+                example.append(PAD_TAG)
             examples.append(example)
 
         return torch.tensor(examples, dtype=self.dtype, device=device)
@@ -215,15 +242,15 @@ def get_fields(
         word_align = AlignField()
         fields["align"] = word_align
 
-    # wei 20200721
+    # wei 20200805
     if with_nfr_tag:
-        nfr_tag = TagField()
+        nfr_tag = NFRTagField()
         fields['nfr_tag'] = nfr_tag
     # end wei
 
-    # wei 20200730
+    # wei 20200805
     if with_flat_tag:
-        flat_tag = TagField()
+        flat_tag = FlatTagField()
         fields['flat_tag'] = flat_tag
     # end wei
 

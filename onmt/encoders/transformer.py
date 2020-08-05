@@ -109,7 +109,7 @@ class TransformerEncoder(EncoderBase):
         self.nfr_tag_mode = nfr_tag_mode
         self.d_tag = d_tag
         if self.nfr_tag_mode in ('concat', 'add'):
-            TAG_TYPES = 3   # S, T, R
+            TAG_TYPES = 100   # wei 20200803 set it larger for possible expansion of nfr tag types.
             self.nfr_tag_embedding = nn.Embedding(TAG_TYPES, self.d_tag)
         # end wei
 
