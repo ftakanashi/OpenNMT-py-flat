@@ -130,6 +130,10 @@ class Translator(object):
             verbose=False,
             report_time=False,
             copy_attn=False,
+            # wei 20200809
+            translate_with_nfr_tag=False,
+            flat_options=None,
+            # end wei
             global_scorer=None,
             out_file=None,
             report_align=False,
@@ -182,6 +186,11 @@ class Translator(object):
         self.report_time = report_time
 
         self.copy_attn = copy_attn
+
+        # wei 20200809
+        self.translate_with_nfr_tag = translate_with_nfr_tag
+        self.flat_options = flat_options
+        # end wei
 
         self.global_scorer = global_scorer
         if self.global_scorer.has_cov_pen and \
@@ -243,6 +252,12 @@ class Translator(object):
         tag_reader = inputters.str2reader["text"].from_opt(opt)
         # end wei
         tgt_reader = inputters.str2reader["text"].from_opt(opt)
+
+        # wei 20200809
+        flat_options = model_opt.flat_options if model_opt.flat_layers > 0 else []
+        translate_with_nfr_tag = model_opt.nfr_tag_mode != 'none'
+        # end wei
+
         return cls(
             model,
             fields,
@@ -270,6 +285,10 @@ class Translator(object):
             verbose=opt.verbose,
             report_time=opt.report_time,
             copy_attn=model_opt.copy_attn,
+            # wei 20200809
+            translate_with_nfr_tag=translate_with_nfr_tag,
+            flat_options=flat_options,
+            # end wei
             global_scorer=global_scorer,
             out_file=out_file,
             report_align=report_align,
@@ -297,8 +316,9 @@ class Translator(object):
     def translate(
             self,
             src,
-            # wei 20200726
-            tag=None,
+            # wei 20200809
+            nfr_tag=None,
+            flat_tag=None,
             # end wei
             tgt=None,
             src_dir=None,
@@ -333,13 +353,15 @@ class Translator(object):
             raise ValueError('Prefix should be feed to tgt if -tgt_prefix.')
 
         src_data = {"reader": self.src_reader, "data": src, "dir": src_dir}
-        # wei 20200726
-        tag_data = {"reader": self.tag_reader, "data": tag, "dir": None}
+        # wei 20200809
+        nfr_tag_data = {"reader": self.tag_reader, "data": nfr_tag, "dir": None}
+        flat_tag_data = {"reader": self.tag_reader, "data": flat_tag, "dir": None}
         # end wei
         tgt_data = {"reader": self.tgt_reader, "data": tgt, "dir": None}
         _readers, _data, _dir = inputters.Dataset.config(
-            # [('src', src_data), ('tgt', tgt_data)])    # wei 20200726
-            [('src', src_data), ('tag', tag_data), ('tgt', tgt_data)])
+            # [('src', src_data), ('tgt', tgt_data)])    # wei 20200809
+            [('src', src_data), ('nfr_tag', nfr_tag_data),
+             ('flat_tag', flat_tag_data), ('tgt', tgt_data)])
 
         # corpus_id field is useless here
         if self.fields.get("corpus_id", None) is not None:
@@ -573,9 +595,30 @@ class Translator(object):
         src, src_lengths = batch.src if isinstance(batch.src, tuple) \
                            else (batch.src, None)
 
+        # wei 20200809
+        nfr_tag = None
+        if self.translate_with_nfr_tag:
+            assert batch.nfr_tag is not None, 'The model is trained with NFR tag so you need to provide those' \
+                                              'tags during translating.'
+            nfr_tag = batch.nfr_tag
+
+        flat_tag = None
+        if len(self.flat_options) > 0:
+            assert batch.flat_tag is not None, 'The model is trained with flat tags so you need to provide those' \
+                                               'tags during translating.'
+            flat_tag = batch.flat_tag
+
+        extra_for_enc = {
+            'nfr_tag': nfr_tag,
+            'flat_tag': flat_tag,
+            'flat_options': self.flat_options
+        }
+        # end wei
+
         enc_states, memory_bank, src_lengths = self.model.encoder(
-            # src, src_lengths)    # wei 20200726
-            src, src_lengths, tag=batch.tag)
+            # src, src_lengths)    # wei 20200809
+            src, src_lengths, **extra_for_enc)
+
         if src_lengths is None:
             assert not isinstance(memory_bank, tuple), \
                 'Ensemble decoding only supported for text data'
@@ -601,12 +644,31 @@ class Translator(object):
                 decoder_in.gt(self._tgt_vocab_len - 1), self._tgt_unk_idx
             )
 
+        # wei 20200809
+        flat_tag = None
+        if len(self.flat_options) > 0:
+            assert batch.flat_tag is not None, 'The model is trained with flat tags so you need to provide those' \
+                                               'tags during translating.'
+            flat_tag = batch.flat_tag
+            if self.beam_size > 1:    # original mask will be expand to beam_size times during decode_strategy.initiate
+                # apply similar operation to flat_tag
+                max_len = flat_tag.size(-1)
+                flat_tag = flat_tag.repeat(1, self.beam_size, 1).reshape(-1, max_len)
+
+
+        extra_for_dec = {
+            'flat_tag': flat_tag,
+            'flat_options': self.flat_options
+        }
+        # end wei
+
         # Decoder forward, takes [tgt_len, batch, nfeats] as input
         # and [src_len, batch, hidden] as memory_bank
         # in case of inference tgt_len = 1, batch = beam times batch_size
         # in case of Gold Scoring tgt_len = actual length, batch = 1 batch
         dec_out, dec_attn = self.model.decoder(
-            decoder_in, memory_bank, memory_lengths=memory_lengths, step=step
+            # decoder_in, memory_bank, memory_lengths=memory_lengths, step=step
+            decoder_in, memory_bank, memory_lengths=memory_lengths, step=step, **extra_for_dec
         )
 
         # Generator forward.

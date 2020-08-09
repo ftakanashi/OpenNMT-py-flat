@@ -686,9 +686,11 @@ def translate_opts(parser):
     group.add('--src', '-src', required=True,
               help="Source sequence to decode (one line per "
                    "sequence)")
-    # wei 20200726
+    # wei 20200809
     group.add('--src_nfr_tag', '-src_nfr_tag', default=None,
-              help='Source NFR tags')
+              help='Source NFR tags.')
+    group.add('--src_flat_tag', '-src_flat_tag', default=None,
+              help='Source flat tags.')
     # end wei
     group.add('--src_dir', '-src_dir', default="",
               help='Source directory for image or audio files')

@@ -501,8 +501,12 @@ def build_noise_field(src_field, subword=True,
         def is_word_start(x): return True
 
     vocab_size = len(src_field.vocab)
-    word_start_mask = torch.zeros([vocab_size]).bool()
-    end_of_sentence_mask = torch.zeros([vocab_size]).bool()
+    try:
+        word_start_mask = torch.zeros([vocab_size]).bool()
+        end_of_sentence_mask = torch.zeros([vocab_size]).bool()
+    except AttributeError as e:
+        word_start_mask = torch.zeros([vocab_size]).type(torch.uint8)
+        end_of_sentence_mask = torch.zeros([vocab_size]).type(torch.uint8)
     for i, t in enumerate(src_field.vocab.itos):
         if is_word_start(t):
             word_start_mask[i] = True
