@@ -28,20 +28,32 @@ During testing, no extra options are needed.
 ## Flat-Transformer
 Add option "--train_flat_tag FILE" and "--valid_flat_tag FILE" during preprocessing.
 Add option "--flat_layers N" and "--flat_options TAGS" during training.
+Add option "--src_flat_tag FILE" during testing.
 
 We changed the way of training a flat transformer.
 During preprocessing, flat tag files are needed. Fat tag files have the same exact number of tokens as
 the original source corpus. Tokens in flat tag files are tags specifying different type of original source
 tokens.
 
+### Preprocess
+--train_flat_tag and --valid_flat_tag respectively specify the flat tag file for train and valid.
+Each file should contain the exact same number of tokens as the source corpus does.
+**Tag symbol for every type requires to be a integer figure.**
+
+### Train
 --flat_layers N still specifies how many layers to be flat.
 --flat_options accept a list of tag options. Only the tokens whose corresponding flat tag in the flat tag files
 are included in the flat options list will be processed in the flat layers, namely the self-attention and
 context attention will be calculated.
+**All the options in flat_options must be integers.**
 
 Default N is -1, which means that no flat layers are adopted.
 
 Note. N is a integer and -1 <= N <= --layers(number of encoder layers)
+
+### Test
+--src_flat_tag specifies the flat tag for the testing source corpus.
+Note that this option is mandatory for the models which are trained in flat tag settings.
 
 ## NFR tag
 Add option "--train_nfr_tag FILE" and "--valid_nfr_tag FILE" during preprocessing.
@@ -51,7 +63,7 @@ Add option '--nfr_tag_mode \[none \| concat \| add\]' and "--nfr_tag_vec_size D"
 Add option '--src_nfr_tag FILE' during testing.
 
 --train_nfr_tag requires a file which has equal lines and tokens
-as the -train_src file. Every token in the tag file is 0, 1 or 2 and corresponds
+as the -train_src file. Every token in the tag file is an integer and corresponds
 to the token in training source corpus at the same position.
 
 0, 1 and 2 represents for 'S'(source token), 'T'(related token in Fuzzy Match) and 

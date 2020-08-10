@@ -81,6 +81,7 @@ class AlignField(LabelField):
 
         return align_idx
 
+
 # wei 20200805
 class NFRTagField(LabelField):
 
@@ -130,6 +131,10 @@ class FlatTagField(LabelField):
             examples.append(example)
 
         return torch.tensor(examples, dtype=self.dtype, device=device)
+# end wei
+
+# wei 20200810
+TagField = FlatTagField
 # end wei
 
 def parse_align_idx(align_pharaoh):

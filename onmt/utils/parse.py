@@ -92,6 +92,16 @@ class ArgumentParser(cfargparse.ArgumentParser):
             assert model_opt.flat_options is not None, 'At least one option of tag should be specified.'
             # end wei
 
+            # wei 20200810
+            _flat_options = []
+            for opt in model_opt.flat_options:
+                try:
+                    _flat_options.append(int(opt))
+                except ValueError as e:
+                    raise ValueError('Every flat option should be a integer.')
+            model_opt.flat_options = _flat_options
+            # end wei
+
         # end wei
 
         # wei 20200723

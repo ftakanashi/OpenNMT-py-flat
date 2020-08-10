@@ -635,6 +635,9 @@ class Translator(object):
             batch,
             src_vocabs,
             memory_lengths,
+            # wei 20200810
+            flat_tag=None,
+            # end wei
             src_map=None,
             step=None,
             batch_offset=None):
@@ -645,17 +648,6 @@ class Translator(object):
             )
 
         # wei 20200809
-        flat_tag = None
-        if len(self.flat_options) > 0:
-            assert batch.flat_tag is not None, 'The model is trained with flat tags so you need to provide those' \
-                                               'tags during translating.'
-            flat_tag = batch.flat_tag
-            if self.beam_size > 1:    # original mask will be expand to beam_size times during decode_strategy.initiate
-                # apply similar operation to flat_tag
-                max_len = flat_tag.size(-1)
-                flat_tag = flat_tag.repeat(1, self.beam_size, 1).reshape(-1, max_len)
-
-
         extra_for_dec = {
             'flat_tag': flat_tag,
             'flat_options': self.flat_options
@@ -745,6 +737,20 @@ class Translator(object):
         fn_map_state, memory_bank, memory_lengths, src_map = \
             decode_strategy.initialize(memory_bank, src_lengths, src_map,
                                        target_prefix=target_prefix)
+        # wei 20200810
+        # It's too complicated to integrate the initialization for flat tags in multi-beam situation
+        # in decode_strategy. A simple way is to initialize it here.
+        flat_tag = None
+        if len(self.flat_options) > 0:
+            assert batch.flat_tag is not None, 'The model is trained with flat tags so you need to provide those' \
+                                               'tags during translating.'
+            flat_tag = batch.flat_tag
+            if self.beam_size > 1:    # original mask will be expand to beam_size times during decode_strategy.initiate
+                # apply similar operation to flat_tag
+                max_len = flat_tag.size(-1)
+                flat_tag = flat_tag.unsqueeze(1).repeat(1, self.beam_size, 1).reshape(-1, max_len)
+        # end wei
+
         if fn_map_state is not None:
             self.model.decoder.map_state(fn_map_state)
 
@@ -757,6 +763,9 @@ class Translator(object):
                 memory_bank,
                 batch,
                 src_vocabs,
+                # wei 20200810
+                flat_tag=flat_tag,
+                # end wei
                 memory_lengths=memory_lengths,
                 src_map=src_map,
                 step=step,
@@ -780,6 +789,12 @@ class Translator(object):
                     memory_bank = memory_bank.index_select(1, select_indices)
 
                 memory_lengths = memory_lengths.index_select(0, select_indices)
+
+                # wei 20200810
+                # if any batch example has finished decoding, the corresponding flat tag should also be modified
+                # like memory_lengths and memory_bank does
+                flat_tag = flat_tag.index_select(0, select_indices)
+                # end wei
 
                 if src_map is not None:
                     src_map = src_map.index_select(1, select_indices)
