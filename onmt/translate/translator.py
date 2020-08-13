@@ -604,8 +604,8 @@ class Translator(object):
 
         flat_tag = None
         if len(self.flat_options) > 0:
-            assert batch.flat_tag is not None, 'The model is trained with flat tags so you need to provide those' \
-                                               'tags during translating.'
+            assert hasattr(batch, 'flat_tag') and batch.flat_tag is not None, 'The model is trained with flat tags so you need to ' \
+                                                           'provide those tags during translating.'
             flat_tag = batch.flat_tag
 
         extra_for_enc = {
@@ -793,7 +793,8 @@ class Translator(object):
                 # wei 20200810
                 # if any batch example has finished decoding, the corresponding flat tag should also be modified
                 # like memory_lengths and memory_bank does
-                flat_tag = flat_tag.index_select(0, select_indices)
+                if flat_tag is not None:
+                    flat_tag = flat_tag.index_select(0, select_indices)
                 # end wei
 
                 if src_map is not None:
