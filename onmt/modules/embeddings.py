@@ -205,7 +205,10 @@ class Embeddings(nn.Module):
 
         self.seg_token_id = seg_token_id
         if self.seg_token_id is not None:
-            self.segment_embedding = nn.Embedding(2, self.embedding_size)
+            # wei 20200814
+            SEG_TOKEN_TYPES = 100
+            self.segment_embedding = nn.Embedding(SEG_TOKEN_TYPES, self.embedding_size)
+            # end wei
 
         self.flat_layer_flag = flat_layer_flag    # wei 20200723
 
@@ -304,20 +307,54 @@ class Embeddings(nn.Module):
 
 
     def convert_seg_token(self, source, seg_token_id):
-        norm_shape = source.squeeze(-1).t()
-        seg_tokens = torch.zeros_like(norm_shape)
-        rows, cols = seg_tokens.shape
+
+        # wei 20200814
+        SEG_TOKEN_0 = 0
+        SEG_TOKEN_1 = 1
+        SEG_TOKEN_PAD = 2
+
+        norm_shape_source = source.squeeze(-1).t()
+        seg_tokens = torch.zeros_like(norm_shape_source)
+        rows, cols = norm_shape_source.shape
         real_source_lengths = []
         for i in range(rows):
-            flag = 0
-            row_len_count = 0
+            flag_1 = True
+            flag_2 = True
             for j in range(cols):
-                if flag == 0:
-                    row_len_count += 1
-                if norm_shape[i][j] == seg_token_id:
-                    flag = 1
-                seg_tokens[i][j] = flag
-            real_source_lengths.append(row_len_count)
+
+                if norm_shape_source[i][j] == seg_token_id:
+                    flag_1 = False
+                    real_source_lengths.append(j)
+                elif norm_shape_source[i][j] == self.word_padding_idx:
+                    assert flag_1 is False
+                    flag_2 = False
+
+                if flag_1 and flag_2:
+                    seg_tokens[i][j] = SEG_TOKEN_0
+                elif flag_2:
+                    seg_tokens[i][j] = SEG_TOKEN_1
+                else:
+                    seg_tokens[i][j] = SEG_TOKEN_PAD
+
         seg_tokens = seg_tokens.t()
         real_source_lengths = torch.Tensor(real_source_lengths).type(torch.int64).to(seg_tokens.device)
         return seg_tokens, real_source_lengths
+        # end wei
+
+        # norm_shape = source.squeeze(-1).t()
+        # seg_tokens = torch.zeros_like(norm_shape)
+        # rows, cols = seg_tokens.shape
+        # real_source_lengths = []
+        # for i in range(rows):
+        #     flag = 0
+        #     row_len_count = 0
+        #     for j in range(cols):
+        #         if flag == 0:
+        #             row_len_count += 1
+        #         if norm_shape[i][j] == seg_token_id:
+        #             flag = 1
+        #         seg_tokens[i][j] = flag
+        #     real_source_lengths.append(row_len_count)
+        # seg_tokens = seg_tokens.t()
+        # real_source_lengths = torch.Tensor(real_source_lengths).type(torch.int64).to(seg_tokens.device)
+        # return seg_tokens, real_source_lengths

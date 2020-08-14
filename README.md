@@ -16,10 +16,11 @@ Segment embedding assigns extra input stream which consists only 0 and 1 for eac
 token so that model can recognize whether a token comes from the first part or the
 second part.
 
-Default token of the seperation must be "@@@" in current implementation(will be able to change in future).
+Default token of the separation must be "@@@" in current implementation(will be able to change in future).
 
 All tokens before the **first** "@@@" are regarded as the first part. Thus they would be have
-a segment token id "0". All the other tokens are "1".
+a segment token id "0". All the other tokens are "1". Note that when batch_size > 1, an example is very likely
+to be appended with multiple PAD tokens. In this case, segment token for PAD tokens are "2".
 ### usage
 Add "--segment_embedding" as a training option.
 
